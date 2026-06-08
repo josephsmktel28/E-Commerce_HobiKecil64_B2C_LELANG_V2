@@ -210,6 +210,18 @@
                                             </fieldset>
                                              @error('auction_enabled') <span class="alert alert-danger text-center">{{$message}} @enderror
 
+                                            <fieldset class="name">
+                                                <div class="body-title mb-10">Auction Start</div>
+                                                <input class="mb-10" type="datetime-local" name="auction_start" value="{{ $product->auction_start ? \Carbon\Carbon::parse($product->auction_start)->format('Y-m-d\\TH:i') : '' }}">
+                                            </fieldset>
+                                            @error('auction_start') <span class="alert alert-danger text-center">{{$message}} @enderror
+
+                                            <fieldset class="name">
+                                                <div class="body-title mb-10">Auction End</div>
+                                                <input class="mb-10" type="datetime-local" name="auction_end" value="{{ $product->auction_end ? \Carbon\Carbon::parse($product->auction_end)->format('Y-m-d\\TH:i') : '' }}">
+                                            </fieldset>
+                                            @error('auction_end') <span class="alert alert-danger text-center">{{$message}} @enderror
+
                                         </div>
                                         <div class="cols gap10">
                                             <button class="tf-button w-full" type="submit">Update product</button>

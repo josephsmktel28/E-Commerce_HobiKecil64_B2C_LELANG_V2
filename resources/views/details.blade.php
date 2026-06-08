@@ -129,6 +129,8 @@
           @if(Cart::instance('cart')->content()->where('id',$product->id)->count()>0)
           <a href="{{route('cart.index')}}" class="btn btn-warning mb-3" >Pergi Ke Keranjang</a>
           @else
+          {{-- Tampilkan tombol beli jika bukan produk lelang, atau jika lelang sudah berakhir dan user adalah pemenangnya --}}
+          @if(!$product->auction_enabled || (isset($auctionClosed) && $auctionClosed && isset($isWinner) && $isWinner))
           <form name="addtocart-form" method="post" action="{{route('cart.add')}}">
           @csrf
             <div class="product-single__addtocart">
@@ -143,35 +145,63 @@
               <button type="submit" class="btn btn-primary btn-addtocart" data-aside="cartDrawer">Simpan Ke Keranjang</button>
             </div>
           </form>
+          @else
+            <div class="alert alert-info">Lelang sudah selesai, hanya pemenang yang bisa membeli.</div>
+          @endif
           @endif
 
           @if($auctionEnabled)
-            @auth
-              <div class="product-single__bid mt-4">
-                <h5 class="mb-3">Ajukan Bid</h5>
-                <form method="POST" action="{{ route('shop.product.bid', ['product_slug' => $product->slug]) }}">
-                  @csrf
-                  <div class="mb-3">
-                    <label for="bid_amount" class="form-label">Jumlah Bid (Rp)</label>
-                    <input type="number" id="bid_amount" name="bid_amount" min="1" class="form-control"
-                      value="{{ old('bid_amount') ?? (isset($highestBid) && $highestBid ? $highestBid->bid_amount + 1 : ($product->sale_price ?: $product->regular_price)) }}"
-                      required>
-                  </div>
-                  <button type="submit" class="btn btn-outline-primary">Ajukan Bid</button>
-                </form>
-              </div>
+            @if($auctionActive)
+              @auth
+                <div class="product-single__bid mt-4">
+                  <h5 class="mb-3">Ajukan Bid</h5>
+                  @if($product->auction_end)
+                    <div class="product-single__countdown mb-3">
+                      <div class="text-muted mb-2">Sisa waktu lelang</div>
+                      <div class="position-relative d-flex align-items-center text-center pt-2 js-countdown"
+                        data-datetime="{{ $product->auction_end->toIso8601String() }}"
+                        data-date="{{ $product->auction_end->format('d-m-Y') }}"
+                        data-time="{{ $product->auction_end->format('H:i') }}">
++                        <div class="day countdown-unit">
++                          <span class="countdown-num d-block"></span>
++                          <span class="countdown-word text-uppercase text-secondary">Days</span>
++                        </div>
++                        <div class="hour countdown-unit">
++                          <span class="countdown-num d-block"></span>
++                          <span class="countdown-word text-uppercase text-secondary">Hours</span>
++                        </div>
++                        <div class="min countdown-unit">
++                          <span class="countdown-num d-block"></span>
++                          <span class="countdown-word text-uppercase text-secondary">Mins</span>
++                        </div>
++                        <div class="sec countdown-unit">
++                          <span class="countdown-num d-block"></span>
++                          <span class="countdown-word text-uppercase text-secondary">Sec</span>
++                        </div>
++                      </div>
++                    </div>
++                  @endif
+                   <form method="POST" action="{{ route('shop.product.bid', ['product_slug' => $product->slug]) }}">
+                    @csrf
+                    <div class="mb-3">
+                      <label for="bid_amount" class="form-label">Jumlah Bid (Rp)</label>
+                      <input type="number" id="bid_amount" name="bid_amount" min="1" class="form-control"
+                        value="{{ old('bid_amount') ?? (isset($highestBid) && $highestBid ? $highestBid->bid_amount + 1 : ($product->sale_price ?: $product->regular_price)) }}"
+                        required>
+                    </div>
+                    <button type="submit" class="btn btn-outline-primary">Ajukan Bid</button>
+                  </form>
+                </div>
+              @else
+                <div class="alert alert-info mt-4">
+                  Silakan <a href="{{ route('login') }}">masuk</a> untuk ikut bid produk ini.
+                </div>
+              @endauth
+            @elseif($auctionClosed)
+              <div class="alert alert-secondary mt-4">Lelang untuk produk ini telah berakhir.</div>
             @else
-              <div class="alert alert-info mt-4">
-                Silakan <a href="{{ route('login') }}">masuk</a> untuk ikut bid produk ini.
-              </div>
-            @endauth
-
-            @if(isset($bidHistory) && $bidHistory->count())
-          @else
-            <div class="alert alert-secondary mt-4">
-              Lelang untuk produk ini belum aktif.
-            </div>
-          @endif
+              <div class="alert alert-secondary mt-4">Lelang untuk produk ini belum aktif.</div>
+            @endif
             <div class="product-single__bid-history mt-4">
               <h6>Riwayat Bid Terakhir</h6>
               <ul class="list-group">
@@ -179,7 +209,7 @@
                   <li class="list-group-item d-flex justify-content-between align-items-center">
                     <div>
                       <strong>{{ $bid->user?->name ?? 'Pembeli' }}</strong>
-                      <div class="text-muted small">{{ $bid->created_at->format('d M Y H:i') }}</div>
+                      <div class="text-muted small"><span class="js-bid-time" data-datetime="{{ $bid->created_at->toIso8601String() }}">{{ $bid->created_at->format('d M Y H:i') }}</span></div>
                     </div>
                     <span>Rp {{ number_format($bid->bid_amount, 0, ',', '.') }}</span>
                   </li>

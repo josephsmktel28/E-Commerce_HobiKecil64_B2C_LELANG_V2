@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Bid;
 use App\Models\Product;
+use App\Models\AuctionWinner;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\Request;
 use App\Models\Brand;
 use App\Models\Category;
@@ -63,7 +65,12 @@ class ShopController extends Controller
 
         $isAuctionPage = $request->query('auction') === '1' || $request->routeIs('shop.auctions');
         if ($isAuctionPage) {
-            $products->where('auction_enabled', 1);
+            $products->where('auction_enabled', 1)
+                ->where(function($q){
+                    $q->whereNull('auction_start')->orWhere('auction_start', '<=', now());
+                })->where(function($q){
+                    $q->whereNull('auction_end')->orWhere('auction_end', '>=', now());
+                });
         } else {
             // On regular shop listing, exclude auction products
             $products->where('auction_enabled', 0);
@@ -104,11 +111,52 @@ class ShopController extends Controller
 
         $highestBid = $product->bids()->orderByDesc('bid_amount')->first();
         $auctionEnabled = $product->auction_enabled ? true : false;
+        $auctionActive = $product->isAuctionActive();
+        $auctionClosed = $product->isAuctionClosed();
         $currentPrice = $auctionEnabled && $highestBid ? $highestBid->bid_amount : ($product->sale_price ?: $product->regular_price);
         $bidHistory = $product->bids()->with('user')->orderByDesc('bid_amount')->take(5)->get();
         $rproducts = Product::where('slug', '<>', $product_slug)->get()->take(8);
 
-        return view('details', compact('product', 'rproducts', 'highestBid', 'currentPrice', 'bidHistory', 'auctionEnabled'));
+        $hasWinner = false;
+        $isWinner = false;
+        $winnerRecord = null;
+
+        if (Schema::hasTable('auction_winners')) {
+            $winnerRecord = AuctionWinner::where('product_id', $product->id)->first();
+            $hasWinner = $winnerRecord !== null;
+        }
+
+        if ($auctionClosed && $highestBid) {
+            $hasWinner = true;
+        }
+
+        if (auth()->check()) {
+            $userId = auth()->id();
+            if ($winnerRecord) {
+                $isWinner = false;
+                if ((int) $winnerRecord->user_id === $userId) {
+                    if (is_null($winnerRecord->reserved_until)) {
+                        $isWinner = true;
+                    } else {
+                        // safe check: reserved_until may be a Carbon instance or a string
+                        if ($winnerRecord->reserved_until instanceof \Illuminate\Support\Carbon) {
+                            $isWinner = $winnerRecord->reserved_until->gte(now());
+                        } else {
+                            try {
+                                $dt = \Illuminate\Support\Carbon::parse($winnerRecord->reserved_until);
+                                $isWinner = $dt->gte(now());
+                            } catch (\Exception $e) {
+                                $isWinner = false;
+                            }
+                        }
+                    }
+                }
+            } elseif ($auctionClosed && $highestBid) {
+                $isWinner = (int) $highestBid->user_id === $userId;
+            }
+        }
+
+        return view('details', compact('product', 'rproducts', 'highestBid', 'currentPrice', 'bidHistory', 'auctionEnabled', 'auctionActive', 'auctionClosed', 'hasWinner', 'isWinner'));
     }
 
     public function submitBid(Request $request, $product_slug)
@@ -120,6 +168,11 @@ class ShopController extends Controller
         $product = Product::where('slug', $product_slug)->first();
         if (!$product) {
             return back()->with('error', 'Produk tidak ditemukan.');
+        }
+
+        // Pastikan lelang sedang aktif
+        if (! $product->isAuctionActive()) {
+            return back()->with('error', 'Lelang untuk produk ini tidak aktif atau telah berakhir.');
         }
 
         $highestBid = $product->bids()->orderByDesc('bid_amount')->first();

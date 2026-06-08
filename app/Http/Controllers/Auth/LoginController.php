@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
+use Surfsidemedia\Shoppingcart\Facades\Cart;
+use Illuminate\Http\Request;
 
 class LoginController extends Controller
 {
@@ -36,5 +38,15 @@ class LoginController extends Controller
     {
         $this->middleware('guest')->except('logout');
         $this->middleware('auth')->only('logout');
+    }
+
+    protected function authenticated(Request $request, $user)
+    {
+        try {
+            $identifier = 'user_' . $user->id;
+            Cart::instance('cart')->restore($identifier);
+        } catch (\Exception $e) {
+            // fail silently
+        }
     }
 }

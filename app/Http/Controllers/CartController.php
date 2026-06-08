@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\Address;
 use Midtrans\Snap;
 use Midtrans\Config;
+use App\Models\AuctionWinner;
+use Illuminate\Support\Facades\Schema;
 
 class CartController extends Controller
 {
@@ -43,6 +45,31 @@ class CartController extends Controller
 
     public function add_to_cart(Request $request)
     {
+        $product = \App\Models\Product::find($request->id);
+        if ($product && $product->auction_enabled) {
+            // If auction still active, block
+            if (! $product->isAuctionClosed()) {
+                return redirect()->back()->with('error', 'Produk ini merupakan item lelang dan tidak dapat ditambahkan ke keranjang sampai lelang berakhir.');
+            }
+
+            $highestBid = $product->bids()->orderByDesc('bid_amount')->first();
+            $winner = null;
+            if (Schema::hasTable('auction_winners')) {
+                $winner = AuctionWinner::where('product_id', $product->id)->first();
+            }
+
+            $isWinner = false;
+            if ($winner) {
+                $isWinner = auth()->check() && auth()->id() === (int) $winner->user_id;
+            } elseif ($highestBid) {
+                $isWinner = auth()->check() && auth()->id() === (int) $highestBid->user_id;
+            }
+
+            if (! $highestBid || ! $isWinner) {
+                return redirect()->back()->with('error', 'Lelang sudah selesai, hanya pemenang yang bisa membeli.');
+            }
+        }
+
         Cart::instance('cart')->add($request->id, $request->name, $request->quantity, $request->price)->associate('App\Models\Product');
         return redirect()->back();
     }

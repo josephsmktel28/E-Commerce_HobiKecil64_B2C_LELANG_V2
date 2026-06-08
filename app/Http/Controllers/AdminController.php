@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\str;
 use Illuminate\Support\Facades\File;
 use Intervention\Image\Laravel\Facades\Image;
+use Illuminate\Support\Facades\Auth;
+use App\Models\AuctionWinner;
 
 class AdminController extends Controller
 {
@@ -276,6 +278,8 @@ class AdminController extends Controller
             'stock_status' => 'required',
             'featured' => 'required',
             'auction_enabled' => 'nullable|boolean',
+            'auction_start' => 'nullable|date',
+            'auction_end' => 'nullable|date|after:auction_start',
             'quantity' => 'required',
             'image' => 'required|mimes:png,jpg,jpeg|max:2048',
             'category_id' => 'required',
@@ -293,6 +297,18 @@ class AdminController extends Controller
         $product->stock_status = $request->stock_status;
         $product->featured = $request->featured;
         $product->auction_enabled = $request->input('auction_enabled', 0) == '1' ? 1 : 0;
+        $auctionStartInput = $request->input('auction_start');
+        $auctionEndInput = $request->input('auction_end');
+        try {
+            $product->auction_start = $auctionStartInput ? Carbon::parse(str_replace('T', ' ', $auctionStartInput)) : null;
+        } catch (\Exception $e) {
+            $product->auction_start = null;
+        }
+        try {
+            $product->auction_end = $auctionEndInput ? Carbon::parse(str_replace('T', ' ', $auctionEndInput)) : null;
+        } catch (\Exception $e) {
+            $product->auction_end = null;
+        }
         $product->quantity = $request->quantity;
         $product->category_id = $request->category_id;
         $product->brand_id = $request->brand_id;
@@ -343,13 +359,13 @@ class AdminController extends Controller
         }
 
         if (extension_loaded('imagick') || extension_loaded('gd')) {
-            if (extension_loaded('imagick')) {
-                Image::configure(['driver' => 'imagick']);
-            } else {
-                Image::configure(['driver' => 'gd']);
-            }
+            $driverClass = extension_loaded('imagick')
+                ? \Intervention\Image\Drivers\Imagick\Driver::class
+                : \Intervention\Image\Drivers\Gd\Driver::class;
 
-            $img = Image::make($image->path());
+            $imageManager = new \Intervention\Image\ImageManager($driverClass);
+
+            $img = $imageManager->read($image->path());
             $img->cover(400, 500, "top");
             $img->resize(400, 500, function ($constraint) {
                 $constraint->aspectRatio();
@@ -385,6 +401,8 @@ class AdminController extends Controller
             'stock_status' => 'required',
             'featured' => 'required',
             'auction_enabled' => 'nullable|boolean',
+            'auction_start' => 'nullable|date',
+            'auction_end' => 'nullable|date|after:auction_start',
             'quantity' => 'required',
             'image' => 'mimes:png,jpg,jpeg|max:2048',
             'category_id' => 'required',
@@ -402,6 +420,18 @@ class AdminController extends Controller
         $product->stock_status = $request->stock_status;
         $product->featured = $request->featured;
         $product->auction_enabled = $request->input('auction_enabled', 0) == '1' ? 1 : 0;
+        $auctionStartInput = $request->input('auction_start');
+        $auctionEndInput = $request->input('auction_end');
+        try {
+            $product->auction_start = $auctionStartInput ? Carbon::parse(str_replace('T', ' ', $auctionStartInput)) : null;
+        } catch (\Exception $e) {
+            $product->auction_start = null;
+        }
+        try {
+            $product->auction_end = $auctionEndInput ? Carbon::parse(str_replace('T', ' ', $auctionEndInput)) : null;
+        } catch (\Exception $e) {
+            $product->auction_end = null;
+        }
         $product->quantity = $request->quantity;
         $product->category_id = $request->category_id;
         $product->brand_id = $request->brand_id;
@@ -452,6 +482,46 @@ class AdminController extends Controller
 
         $product->save();
         return redirect()->route('admin.products')->with('status', 'Product has been updated successfully!');
+    }
+
+    /**
+     * Impersonate the winner of an auctioned product (admin-only, testing helper).
+     * Logs in as the winning user and redirects to the product page.
+     */
+    public function impersonateWinner(Request $request, $product_id)
+    {
+        $winner = AuctionWinner::where('product_id', $product_id)->first();
+
+        if (! $winner) {
+            // fallback to highest bid
+            $product = Product::find($product_id);
+            if (! $product) {
+                return redirect()->back()->with('error', 'Product not found.');
+            }
+            $highestBid = $product->bids()->orderByDesc('bid_amount')->first();
+            if (! $highestBid) {
+                return redirect()->back()->with('error', 'No winner or bids found for this product.');
+            }
+            $userId = (int) $highestBid->user_id;
+        } else {
+            $userId = (int) $winner->user_id;
+        }
+
+        // store current admin id so we can revert later if needed
+        if (auth()->check()) {
+            session(['impersonator_id' => auth()->id()]);
+        }
+
+        Auth::loginUsingId($userId);
+
+        $product = Product::find($product_id);
+        $slug = $product ? $product->slug : null;
+
+        if ($slug) {
+            return redirect()->route('shop.product.details', ['product_slug' => $slug])->with('status', 'You are now impersonating the auction winner for testing.');
+        }
+
+        return redirect()->route('home.index')->with('status', 'You are now impersonating the auction winner.');
     }
 
     public function product_delete($id)

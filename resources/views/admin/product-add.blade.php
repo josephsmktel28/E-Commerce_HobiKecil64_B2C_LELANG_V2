@@ -31,6 +31,17 @@
                                 <form class="tf-section-2 form-add-product" method="POST" enctype="multipart/form-data" action="{{route('admin.product.store')}}">
                                     @csrf
                                     <input type="hidden" name="auction_enabled" value="{{ old('auction_enabled', request('auction', 0)) }}">
+                                    <fieldset class="name">
+                                        <div class="body-title mb-10">Auction Start (optional)</div>
+                                        <input class="mb-10" type="datetime-local" name="auction_start" value="{{ old('auction_start') }}">
+                                    </fieldset>
+                                    @error('auction_start') <span class="alert alert-danger text-center">{{$message}} @enderror
+
+                                    <fieldset class="name">
+                                        <div class="body-title mb-10">Auction End (optional)</div>
+                                        <input class="mb-10" type="datetime-local" name="auction_end" value="{{ old('auction_end') }}">
+                                    </fieldset>
+                                    @error('auction_end') <span class="alert alert-danger text-center">{{$message}} @enderror
                                     <div class="wg-box">
                                         <fieldset class="name">
                                             <div class="body-title mb-10">Product name <span class="tf-color-1">*</span>

@@ -1697,11 +1697,13 @@ function pureFadeOut(e) {
     //   window.location.href='./shop_order_complete.html';
     // });
 
-    document
-        .querySelector(".js-show-register")
-        .addEventListener("click", function (e) {
-            document.querySelector(this.getAttribute("href")).click();
+    const jsShowRegisterEl = document.querySelector(".js-show-register");
+    if (jsShowRegisterEl) {
+        jsShowRegisterEl.addEventListener("click", function (e) {
+            const target = document.querySelector(this.getAttribute("href"));
+            if (target) target.click();
         });
+    }
 
     $("button.js-add-wishlist, a.add-to-wishlist")
         .off("click")
