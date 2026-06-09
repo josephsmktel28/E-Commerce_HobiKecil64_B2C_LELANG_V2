@@ -1,32 +1,48 @@
 .git
+.github
 .gitignore
+.gitattributes
+.editorconfig
 .env
-.env.*.php
 .env.backup
 .env.example
+.env.render
 .env.*.backup
 .phpunit.result.cache
 .DS_Store
+.vscode
+.idea
 Thumbs.db
+
+# Documentation
+README.md
+README_DEPLOYMENT.txt
+DEPLOYMENT.md
+DEPLOYMENT_CHECKLIST.md
+GITHUB_SETUP.md
+
+# Docker files (not needed inside the image)
+docker-compose.yml
+
+# Other deployment configs
+vercel.json
+.vercelignore
+railway.json
+
+# Dev files
+node_modules
+tests
 *.log
 *.swp
 *.swo
 *~
-.vscode
-.idea
 *.pem
-node_modules
-dist
-public/hot
+
+# Storage temp files (recreated at runtime)
 storage/logs/*
 storage/app/uploads/*
 bootstrap/cache/*
-vendor
-tests
-.github
-README.md
-docker-compose.yml
-Dockerfile
-.dockerignore
-.editorconfig
-.gitattributes
+
+# Database files
+e_com
+*.sql

@@ -1,43 +1,58 @@
 #!/bin/sh
 set -e
 
-# Wait for database to be ready
-if [ "$DB_HOST" ]; then
-    echo "Waiting for database at $DB_HOST:$DB_PORT..."
-    max_retries=30
-    retry=0
-    until mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USERNAME" -p"$DB_PASSWORD" -e "SELECT 1" 2>/dev/null || [ $retry -eq $max_retries ]; do
-        retry=$((retry + 1))
-        echo "Database not ready, attempt $retry/$max_retries..."
-        sleep 1
-    done
-    
-    if [ $retry -eq $max_retries ]; then
-        echo "Database connection failed after $max_retries attempts"
-        exit 1
-    fi
-    echo "Database is ready!"
-fi
+echo "=========================================="
+echo "  HobiKecil - Starting Deployment"
+echo "=========================================="
 
-# Generate APP_KEY if not set
+# ---- Render PORT ----
+# Render passes the PORT env var. Default to 10000.
+PORT="${PORT:-10000}"
+echo "[1/6] Configuring nginx to listen on port $PORT..."
+sed -i "s/__RENDER_PORT__/$PORT/g" /etc/nginx/nginx.conf
+
+# ---- Storage directories ----
+echo "[2/6] Ensuring storage directories exist..."
+mkdir -p \
+    storage/logs \
+    storage/framework/cache/data \
+    storage/framework/sessions \
+    storage/framework/views \
+    storage/app/public \
+    bootstrap/cache
+chmod -R 775 storage bootstrap/cache
+
+# ---- Storage link ----
+echo "[3/6] Creating storage symlink..."
+php artisan storage:link --force 2>/dev/null || true
+
+# ---- APP_KEY ----
 if [ -z "$APP_KEY" ]; then
-    echo "Generating APP_KEY..."
+    echo "[!] APP_KEY not set — generating one..."
     php artisan key:generate --force
 fi
 
-# Run migrations
-echo "Running migrations..."
-php artisan migrate --force
+# ---- Database Migration ----
+echo "[4/6] Running database migrations..."
+max_retries=5
+retry=0
+until php artisan migrate --force 2>/dev/null; do
+    retry=$((retry + 1))
+    if [ $retry -ge $max_retries ]; then
+        echo "[WARNING] Migration failed after $max_retries attempts. Continuing anyway..."
+        break
+    fi
+    echo "  Migration attempt $retry/$max_retries failed. Retrying in 5s..."
+    sleep 5
+done
 
-# Clear and cache configuration
-echo "Caching configuration..."
+# ---- Cache config/routes/views ----
+echo "[5/6] Caching configuration..."
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-# Fix permissions
-chmod -R 775 storage bootstrap/cache
-
-# Start supervisor
-echo "Starting application..."
-exec /usr/bin/supervisord -c /etc/supervisord.conf
+# ---- Start Supervisor (nginx + php-fpm) ----
+echo "[6/6] Starting application on port $PORT..."
+echo "=========================================="
+exec /usr/bin/supervisord -n -c /etc/supervisord.conf
