@@ -1,8 +1,9 @@
 # Stage 1: Build Stage
 FROM php:8.2-fpm-alpine as builder
 
-# Install system dependencies
+# Install build dependencies
 RUN apk add --no-cache \
+    build-base \
     curl \
     libpng-dev \
     libjpeg-turbo-dev \
@@ -12,13 +13,14 @@ RUN apk add --no-cache \
     git \
     nodejs \
     npm \
-    postgresql-dev
+    mysql-client \
+    mysql-dev
 
 # Install PHP extensions
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install \
+    && docker-php-ext-install -j$(nproc) \
     pdo \
-    pdo_pgsql \
+    pdo_mysql \
     gd \
     bcmath \
     ctype \
@@ -50,20 +52,19 @@ RUN npm run build
 # Stage 2: Runtime Stage
 FROM php:8.2-fpm-alpine
 
-# Install system dependencies
+# Install runtime dependencies (no dev libs)
 RUN apk add --no-cache \
     libpng \
     libjpeg-turbo \
     freetype \
-    postgresql-libs \
+    mysql-client \
     supervisor \
     nginx
 
-# Install PHP extensions
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install \
+# Install PHP extensions (minimal set, no build-base)
+RUN docker-php-ext-install -j$(nproc) \
     pdo \
-    pdo_pgsql \
+    pdo_mysql \
     gd \
     bcmath \
     ctype \

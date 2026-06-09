@@ -15,9 +15,9 @@ services:
       APP_ENV: local
       APP_DEBUG: "true"
       APP_URL: http://localhost:8080
-      DB_CONNECTION: pgsql
+      DB_CONNECTION: mysql
       DB_HOST: db
-      DB_PORT: 5432
+      DB_PORT: 3306
       DB_DATABASE: ${DB_DATABASE:-hobikecil}
       DB_USERNAME: ${DB_USERNAME:-hobikecil}
       DB_PASSWORD: ${DB_PASSWORD:-password}
@@ -37,21 +37,22 @@ services:
       - redis
 
   db:
-    image: postgres:15-alpine
+    image: mysql:8.0-alpine
     container_name: hobikecil-db
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "3306:3306"
     environment:
-      POSTGRES_DB: ${DB_DATABASE:-hobikecil}
-      POSTGRES_USER: ${DB_USERNAME:-hobikecil}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      MYSQL_DATABASE: ${DB_DATABASE:-hobikecil}
+      MYSQL_USER: ${DB_USERNAME:-hobikecil}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-password}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-password}
     volumes:
-      - hobikecil-db:/var/lib/postgresql/data
+      - hobikecil-db:/var/lib/mysql
     networks:
       - hobikecil-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-hobikecil}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 5

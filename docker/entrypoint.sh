@@ -6,7 +6,7 @@ if [ "$DB_HOST" ]; then
     echo "Waiting for database at $DB_HOST:$DB_PORT..."
     max_retries=30
     retry=0
-    until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USERNAME" 2>/dev/null || [ $retry -eq $max_retries ]; do
+    until mysql -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USERNAME" -p"$DB_PASSWORD" -e "SELECT 1" 2>/dev/null || [ $retry -eq $max_retries ]; do
         retry=$((retry + 1))
         echo "Database not ready, attempt $retry/$max_retries..."
         sleep 1
