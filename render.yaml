@@ -1,0 +1,70 @@
+services:
+  - type: web
+    name: hobikecil-ecom
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    
+    envVars:
+      - key: APP_ENV
+        value: production
+      
+      - key: APP_DEBUG
+        value: "false"
+      
+      - key: LOG_CHANNEL
+        value: stack
+      
+      - key: DB_CONNECTION
+        value: pgsql
+      
+      - key: DB_HOST
+        fromService:
+          type: pgsql
+          property: host
+      
+      - key: DB_PORT
+        value: "25046"
+      
+      - key: DB_USERNAME
+        fromService:
+          type: pgsql
+          property: username
+      
+      - key: DB_PASSWORD
+        fromService:
+          type: pgsql
+          property: password
+      
+      - key: DB_DATABASE
+        fromService:
+          type: pgsql
+          property: database
+      
+      - key: REDIS_HOST
+        value: localhost
+      
+      - key: REDIS_PORT
+        value: "6379"
+      
+      - key: QUEUE_CONNECTION
+        value: database
+      
+      - key: SESSION_DRIVER
+        value: database
+      
+      - key: CACHE_STORE
+        value: database
+      
+      - key: BROADCAST_CONNECTION
+        value: log
+
+databases:
+  - name: hobikecil-db
+    databaseName: hobikecil
+    user: hobikecil_user
+    plan: starter
+    version: "15"
+    ipAllowList:
+      - source: "0.0.0.0/0"
+        description: Allow all

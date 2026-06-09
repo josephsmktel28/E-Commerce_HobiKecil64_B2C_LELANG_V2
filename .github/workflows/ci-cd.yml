@@ -1,0 +1,110 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: hobikecil_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.2'
+        extensions: pdo, pdo_pgsql, gd, mbstring, xml
+        coverage: xdebug
+    
+    - name: Install Dependencies
+      run: composer install --no-interaction --prefer-dist --optimize-autoloader
+    
+    - name: Generate APP_KEY
+      run: php artisan key:generate --env=testing
+    
+    - name: Run Migrations
+      run: php artisan migrate --env=testing
+      env:
+        DB_CONNECTION: pgsql
+        DB_HOST: 127.0.0.1
+        DB_PORT: 5432
+        DB_DATABASE: hobikecil_test
+        DB_USERNAME: test_user
+        DB_PASSWORD: test_password
+    
+    - name: Run Tests
+      run: php artisan test
+      env:
+        DB_CONNECTION: pgsql
+        DB_HOST: 127.0.0.1
+        DB_PORT: 5432
+        DB_DATABASE: hobikecil_test
+        DB_USERNAME: test_user
+        DB_PASSWORD: test_password
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Build Docker Image
+      run: docker build -t ghcr.io/${{ github.repository_owner }}/hobikecil-ecom:latest .
+    
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Push Docker Image
+      run: docker push ghcr.io/${{ github.repository_owner }}/hobikecil-ecom:latest
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Deploy to Render
+      env:
+        RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      run: |
+        # Trigger deployment via Render webhook or API
+        curl -X POST https://api.render.com/deploy \
+          -H "Authorization: Bearer $RENDER_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d "{\"serviceId\": \"$RENDER_SERVICE_ID\"}"
+    
+    - name: Notify Deployment
+      if: success()
+      run: echo "✅ Deployment to Render completed successfully!"
+    
+    - name: Deployment Failed
+      if: failure()
+      run: echo "❌ Deployment to Render failed!"

@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hobikecil-app
+    restart: unless-stopped
+    working_dir: /app
+    ports:
+      - "8080:8080"
+    environment:
+      APP_NAME: HobiKecil
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8080
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-hobikecil}
+      DB_USERNAME: ${DB_USERNAME:-hobikecil}
+      DB_PASSWORD: ${DB_PASSWORD:-password}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SESSION_DRIVER: database
+      CACHE_STORE: database
+      QUEUE_CONNECTION: database
+    volumes:
+      - ./:/app
+      - /app/node_modules
+      - /app/vendor
+    networks:
+      - hobikecil-network
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: postgres:15-alpine
+    container_name: hobikecil-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-hobikecil}
+      POSTGRES_USER: ${DB_USERNAME:-hobikecil}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    volumes:
+      - hobikecil-db:/var/lib/postgresql/data
+    networks:
+      - hobikecil-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-hobikecil}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: hobikecil-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - hobikecil-redis:/data
+    networks:
+      - hobikecil-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  hobikecil-db:
+  hobikecil-redis:
+
+networks:
+  hobikecil-network:
+    driver: bridge
